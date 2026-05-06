@@ -12,13 +12,11 @@
         <servlet-class>LibraryServlet</servlet-class>
     </servlet>
 
-    <!-- Exact mapping for the welcome page -->
     <servlet-mapping>
         <servlet-name>LibraryServlet</servlet-name>
         <url-pattern>/library</url-pattern>
     </servlet-mapping>
 
-    <!-- Mapping for all sub‑pages: /library/books, /library/authors, etc. -->
     <servlet-mapping>
         <servlet-name>LibraryServlet</servlet-name>
         <url-pattern>/library/*</url-pattern>

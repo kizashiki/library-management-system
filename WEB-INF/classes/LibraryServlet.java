@@ -8,24 +8,23 @@ public class LibraryServlet extends HttpServlet {
 
     private static final String URL      = "jdbc:mysql://localhost:3306/library_db?useSSL=false&serverTimezone=UTC";
     private static final String USER     = "root";
-    private static final String PASSWORD = "";   // XAMPP default empty
+    private static final String PASSWORD = "";   // XAMPP default
 
     @Override
     public void init() throws ServletException {
         try { Class.forName("com.mysql.cj.jdbc.Driver"); } catch (Exception e) { e.printStackTrace(); }
     }
 
-    // ==================== HEADER & FOOTER (Professional UI) ====================
+    // ========== HEADER & FOOTER (embedded CSS) ==========
     private void printHeader(HttpServletRequest req, PrintWriter out, String title) {
-        String ctx = req.getContextPath(); // /LibraryWeb
+        String ctx = req.getContextPath();
         out.println("<!DOCTYPE html><html lang='en'><head>");
         out.println("<meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'>");
         out.println("<title>" + title + "</title>");
-        // Google Fonts (optional, falls back if offline)
         out.println("<link rel='preconnect' href='https://fonts.googleapis.com'>");
         out.println("<link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap' rel='stylesheet'>");
         out.println("<style>");
-        out.println(":root { --primary: #4361ee; --primary-dark: #3a56d4; --secondary: #3f37c9; --danger: #e63946; --success: #2ecc71; --bg: #f8f9fa; --card-bg: #ffffff; --text: #212529; --text-light: #6c757d; --border: #dee2e6; --nav-bg: #1e293b; }");
+        out.println(":root { --primary: #4361ee; --primary-dark: #3a56d4; --danger: #e63946; --success: #2ecc71; --bg: #f8f9fa; --card-bg: #ffffff; --text: #212529; --text-light: #6c757d; --border: #dee2e6; --nav-bg: #1e293b; }");
         out.println("* { box-sizing: border-box; margin: 0; padding: 0; }");
         out.println("body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }");
         out.println("nav { background: var(--nav-bg); padding: 0 2rem; display: flex; align-items: center; height: 60px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }");
@@ -62,6 +61,7 @@ public class LibraryServlet extends HttpServlet {
         out.println("<a href='" + ctx + "/library/'>Home</a>");
         out.println("<a href='" + ctx + "/library/books'>Books</a>");
         out.println("<a href='" + ctx + "/library/authors'>Authors</a>");
+        out.println("<a href='" + ctx + "/library/members'>Members</a>");
         out.println("<a href='" + ctx + "/library/loans'>Loans</a>");
         out.println("</nav>");
         out.println("<div class='container'>");
@@ -85,15 +85,18 @@ public class LibraryServlet extends HttpServlet {
             case "/"             : showHome(req, out);                      break;
             case "/books"        : showBooks(req, out);                     break;
             case "/authors"      : showAuthors(req, out);                   break;
+            case "/members"      : showMembers(req, out);                   break;
             case "/loans"        : showLoans(req, out);                     break;
             case "/editBook"     : showEditBookForm(req, resp, out);         break;
             case "/deleteBook"   : deleteBook(req, resp);                   break;
             case "/editAuthor"   : showEditAuthorForm(req, resp, out);       break;
             case "/deleteAuthor" : deleteAuthor(req, resp);                 break;
+            case "/editMember"   : showEditMemberForm(req, resp, out);       break;
+            case "/deleteMember" : deleteMember(req, resp);                 break;
             default:
                 printHeader(req, out, "Not Found");
                 out.println("<p class='error'>Page not found.</p>");
-                out.println("<a href='" + req.getContextPath() + "/library/' class='back-link'>← Back to Home</a>");
+                out.println("<a href='" + req.getContextPath() + "/library/'>Back to Home</a>");
                 printFooter(out);
         }
     }
@@ -109,6 +112,8 @@ public class LibraryServlet extends HttpServlet {
         else if ("/return".equals(path))    { returnBook(req, resp); }
         else if ("/updateBook".equals(path)){ updateBook(req, resp); }
         else if ("/updateAuthor".equals(path)){ updateAuthor(req, resp); }
+        else if ("/addMember".equals(path)) { addMember(req, resp); }
+        else if ("/updateMember".equals(path)){ updateMember(req, resp); }
         else { resp.sendRedirect(req.getContextPath() + "/library/"); }
     }
 
@@ -116,16 +121,114 @@ public class LibraryServlet extends HttpServlet {
     private void showHome(HttpServletRequest req, PrintWriter out) {
         printHeader(req, out, "Library Home");
         out.println("<h2>Welcome to the Library</h2>");
-        out.println("<p>Manage books, authors, and loans from the navigation above.</p>");
+        out.println("<p>Manage books, authors, members, and loans from the navigation above.</p>");
         printFooter(out);
     }
 
-    // ==================== BOOKS ====================
+    // ==================== MEMBERS ====================
+    private void showMembers(HttpServletRequest req, PrintWriter out) {
+        printHeader(req, out, "Members");
+        String ctx = req.getContextPath();
+
+        out.println("<table><thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Actions</th></tr></thead><tbody>");
+        try (Connection c = DriverManager.getConnection(URL, USER, PASSWORD);
+             Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery("SELECT * FROM members ORDER BY member_id")) {
+            while (rs.next()) {
+                int id = rs.getInt("member_id");
+                out.printf("<tr><td>%d</td><td>%s</td><td>%s</td>" +
+                    "<td>" +
+                        "<a href='" + ctx + "/library/editMember?id=%d' class='action-btn'>Edit</a> " +
+                        "<a href='" + ctx + "/library/deleteMember?id=%d' class='action-btn delete-btn' " +
+                        "onclick=\"return confirm('Delete this member?')\">Delete</a>" +
+                    "</td></tr>",
+                    id, rs.getString("name"), rs.getString("email"), id, id);
+            }
+        } catch (SQLException e) {
+            out.println("<tr><td colspan='4' class='error'>Error: " + e.getMessage() + "</td></tr>");
+        }
+        out.println("</tbody></table>");
+
+        out.println("<h3>Add Member</h3>");
+        out.println("<form action='" + ctx + "/library/addMember' method='post'>");
+        out.println("<label>Name</label><input name='name' required>");
+        out.println("<label>Email</label><input name='email' type='email'>");
+        out.println("<input type='submit' value='Add Member'>");
+        out.println("</form>");
+
+        printFooter(out);
+    }
+
+    private void addMember(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        String name  = req.getParameter("name");
+        String email = req.getParameter("email");
+        try (Connection c = DriverManager.getConnection(URL, USER, PASSWORD);
+             PreparedStatement ps = c.prepareStatement("INSERT INTO members (name, email) VALUES (?,?)")) {
+            ps.setString(1, name);
+            ps.setString(2, email);
+            ps.executeUpdate();
+        } catch (SQLException e) { e.printStackTrace(); }
+        resp.sendRedirect(req.getContextPath() + "/library/members");
+    }
+
+    private void showEditMemberForm(HttpServletRequest req, HttpServletResponse resp, PrintWriter out) {
+        int id = Integer.parseInt(req.getParameter("id"));
+        String ctx = req.getContextPath();
+        try (Connection c = DriverManager.getConnection(URL, USER, PASSWORD);
+             PreparedStatement ps = c.prepareStatement("SELECT * FROM members WHERE member_id = ?")) {
+            ps.setInt(1, id);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                printHeader(req, out, "Edit Member");
+                out.println("<h2>Edit Member</h2>");
+                out.println("<form action='" + ctx + "/library/updateMember' method='post'>");
+                out.println("<input type='hidden' name='member_id' value='" + id + "'>");
+                out.println("<label>Name</label><input name='name' value='" + rs.getString("name") + "' required>");
+                out.println("<label>Email</label><input name='email' value='" + rs.getString("email") + "'>");
+                out.println("<input type='submit' value='Update Member'>");
+                out.println("</form>");
+                printFooter(out);
+            } else {
+                printHeader(req, out, "Not Found");
+                out.println("<p class='error'>Member not found.</p><a href='" + ctx + "/library/members'>Back</a>");
+                printFooter(out);
+            }
+        } catch (SQLException e) {
+            printHeader(req, out, "Error");
+            out.println("<p class='error'>" + e.getMessage() + "</p>");
+            printFooter(out);
+        }
+    }
+
+    private void updateMember(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        int id       = Integer.parseInt(req.getParameter("member_id"));
+        String name  = req.getParameter("name");
+        String email = req.getParameter("email");
+        try (Connection c = DriverManager.getConnection(URL, USER, PASSWORD);
+             PreparedStatement ps = c.prepareStatement("UPDATE members SET name=?, email=? WHERE member_id=?")) {
+            ps.setString(1, name);
+            ps.setString(2, email);
+            ps.setInt(3, id);
+            ps.executeUpdate();
+        } catch (SQLException e) { e.printStackTrace(); }
+        resp.sendRedirect(req.getContextPath() + "/library/members");
+    }
+
+    private void deleteMember(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        int id = Integer.parseInt(req.getParameter("id"));
+        try (Connection c = DriverManager.getConnection(URL, USER, PASSWORD);
+             PreparedStatement ps = c.prepareStatement("DELETE FROM members WHERE member_id = ?")) {
+            ps.setInt(1, id);
+            ps.executeUpdate();
+        } catch (SQLException e) { e.printStackTrace(); }
+        resp.sendRedirect(req.getContextPath() + "/library/members");
+    }
+
+    // ==================== BOOKS (dynamic author creation, availability) ====================
     private void showBooks(HttpServletRequest req, PrintWriter out) {
         printHeader(req, out, "Books");
         String ctx = req.getContextPath();
 
-        // Search form
         String search = req.getParameter("search");
         out.println("<form method='get' action='" + ctx + "/library/books' class='search-form'>");
         out.println("<input type='text' name='search' placeholder='Search by title...' value='" +
@@ -133,8 +236,7 @@ public class LibraryServlet extends HttpServlet {
         out.println("<button type='submit'>Search</button>");
         out.println("</form>");
 
-        out.println("<table>");
-        out.println("<thead><tr><th>ID</th><th>Title</th><th>Author</th><th>ISBN</th><th>Qty</th><th>Actions</th></tr></thead><tbody>");
+        out.println("<table><thead><tr><th>ID</th><th>Title</th><th>Author</th><th>ISBN</th><th>Qty</th><th>Available</th><th>Actions</th></tr></thead><tbody>");
 
         String sql = "SELECT b.book_id, b.title, a.name AS author, b.isbn, b.quantity " +
                      "FROM books b JOIN authors a ON b.author_id = a.author_id";
@@ -148,23 +250,28 @@ public class LibraryServlet extends HttpServlet {
 
             while (rs.next()) {
                 int id = rs.getInt("book_id");
+                int qty = rs.getInt("quantity");
+                String available = (qty > 0) ? "<span style='color: var(--success); font-weight:600;'>Yes</span>"
+                                            : "<span style='color: var(--danger); font-weight:600;'>No</span>";
+                String borrowLink = (qty > 0) ? "<a href='" + ctx + "/library/loans?bookId=" + id + "' class='action-btn' style='background: var(--success);'>Borrow</a> " : "";
+
                 out.printf("<tr>" +
                     "<td>%d</td><td>%s</td><td>%s</td><td>%s</td><td>%d</td>" +
+                    "<td>%s</td>" +
                     "<td>" +
+                        borrowLink +
                         "<a href='" + ctx + "/library/editBook?id=%d' class='action-btn'>Edit</a> " +
                         "<a href='" + ctx + "/library/deleteBook?id=%d' class='action-btn delete-btn' " +
                         "onclick=\"return confirm('Delete this book?')\">Delete</a>" +
                     "</td></tr>",
                     id, rs.getString("title"), rs.getString("author"),
-                    rs.getString("isbn"), rs.getInt("quantity"),
-                    id, id);
+                    rs.getString("isbn"), qty, available, id, id);
             }
         } catch (SQLException e) {
-            out.println("<tr><td colspan='6' class='error'>Error: " + e.getMessage() + "</td></tr>");
+            out.println("<tr><td colspan='7' class='error'>Error: " + e.getMessage() + "</td></tr>");
         }
         out.println("</tbody></table>");
 
-        // Add Book form
         out.println("<h3>Add New Book</h3>");
         out.println("<form action='" + ctx + "/library/addBook' method='post'>");
         out.println("<label>Title</label><input name='title' required>");
@@ -176,6 +283,8 @@ public class LibraryServlet extends HttpServlet {
 
         printFooter(out);
     }
+
+    // … (the rest of the methods for authors, loans, dynamic author creation, etc. – all are included below for completeness)
 
     // ==================== DYNAMIC AUTHOR ====================
     private int getOrCreateAuthor(String name) {
@@ -237,7 +346,6 @@ public class LibraryServlet extends HttpServlet {
         }
     }
 
-    // ==================== EDIT / DELETE BOOKS ====================
     private void showEditBookForm(HttpServletRequest req, HttpServletResponse resp, PrintWriter out) {
         int id = Integer.parseInt(req.getParameter("id"));
         String ctx = req.getContextPath();
@@ -251,19 +359,17 @@ public class LibraryServlet extends HttpServlet {
                 out.println("<form action='" + ctx + "/library/updateBook' method='post'>");
                 out.println("<input type='hidden' name='book_id' value='" + id + "'>");
                 out.println("<label>Title</label><input name='title' value='" + rs.getString("title") + "' required>");
-
                 out.println("<label>Author</label><select name='author_id' required>");
                 try (Connection c2 = DriverManager.getConnection(URL, USER, PASSWORD);
                      Statement st2 = c2.createStatement();
                      ResultSet rs2 = st2.executeQuery("SELECT author_id, name FROM authors ORDER BY name")) {
                     while (rs2.next()) {
                         int authId = rs2.getInt("author_id");
-                        String selected = (authId == rs.getInt("author_id")) ? " selected" : "";
-                        out.printf("<option value='%d'%s>%s</option>", authId, selected, rs2.getString("name"));
+                        String sel = (authId == rs.getInt("author_id")) ? " selected" : "";
+                        out.printf("<option value='%d'%s>%s</option>", authId, sel, rs2.getString("name"));
                     }
                 } catch (SQLException e) { out.println("<option disabled>Error</option>"); }
                 out.println("</select>");
-
                 out.println("<label>ISBN</label><input name='isbn' value='" + rs.getString("isbn") + "' required>");
                 out.println("<label>Quantity</label><input name='quantity' type='number' value='" + rs.getInt("quantity") + "'>");
                 out.println("<input type='submit' value='Update Book'>");
@@ -271,7 +377,7 @@ public class LibraryServlet extends HttpServlet {
                 printFooter(out);
             } else {
                 printHeader(req, out, "Not Found");
-                out.println("<p class='error'>Book not found.</p><a href='" + ctx + "/library/books' class='back-link'>Back</a>");
+                out.println("<p class='error'>Book not found.</p><a href='" + ctx + "/library/books'>Back</a>");
                 printFooter(out);
             }
         } catch (SQLException e) {
@@ -287,7 +393,6 @@ public class LibraryServlet extends HttpServlet {
         int authorId = Integer.parseInt(req.getParameter("author_id"));
         String isbn = req.getParameter("isbn");
         int qty = Integer.parseInt(req.getParameter("quantity"));
-
         String sql = "UPDATE books SET title=?, author_id=?, isbn=?, quantity=? WHERE book_id=?";
         try (Connection c = DriverManager.getConnection(URL, USER, PASSWORD);
              PreparedStatement ps = c.prepareStatement(sql)) {
@@ -333,7 +438,6 @@ public class LibraryServlet extends HttpServlet {
             out.println("<tr><td colspan='3' class='error'>Error: " + e.getMessage() + "</td></tr>");
         }
         out.println("</tbody></table>");
-
         out.println("<h3>Add Author</h3>");
         out.println("<form action='" + ctx + "/library/addAuthor' method='post'>");
         out.println("<label>Name</label><input name='name' required>");
@@ -370,7 +474,7 @@ public class LibraryServlet extends HttpServlet {
                 printFooter(out);
             } else {
                 printHeader(req, out, "Not Found");
-                out.println("<p class='error'>Author not found.</p><a href='" + ctx + "/library/authors' class='back-link'>Back</a>");
+                out.println("<p class='error'>Author not found.</p><a href='" + ctx + "/library/authors'>Back</a>");
                 printFooter(out);
             }
         } catch (SQLException e) {
@@ -402,21 +506,28 @@ public class LibraryServlet extends HttpServlet {
         resp.sendRedirect(req.getContextPath() + "/library/authors");
     }
 
-    // ==================== LOANS ====================
+    // ==================== LOANS (with member dropdown) ====================
     private void showLoans(HttpServletRequest req, PrintWriter out) {
         printHeader(req, out, "Loans");
         String ctx = req.getContextPath();
 
-        out.println("<table><thead><tr><th>Loan ID</th><th>Book</th><th>Borrower</th><th>Loan Date</th><th>Due Date</th><th>Status</th></tr></thead><tbody>");
-        String sql = "SELECT l.loan_id, b.title, l.borrower, l.loan_date, l.due_date, l.status " +
-                     "FROM loans l JOIN books b ON l.book_id = b.book_id ORDER BY l.status, l.due_date";
+        // Pre-fill book ID if passed
+        String preBookId = req.getParameter("bookId");
+        String bookIdVal = (preBookId != null) ? preBookId : "";
+
+        out.println("<table><thead><tr><th>Loan ID</th><th>Book</th><th>Member</th><th>Loan Date</th><th>Due Date</th><th>Status</th></tr></thead><tbody>");
+        String sql = "SELECT l.loan_id, b.title, m.name AS member_name, l.loan_date, l.due_date, l.status " +
+                     "FROM loans l " +
+                     "JOIN books b ON l.book_id = b.book_id " +
+                     "JOIN members m ON l.member_id = m.member_id " +
+                     "ORDER BY l.status, l.due_date";
         try (Connection c = DriverManager.getConnection(URL, USER, PASSWORD);
              Statement st = c.createStatement();
              ResultSet rs = st.executeQuery(sql)) {
             while (rs.next()) {
                 out.printf("<tr><td>%d</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>",
                     rs.getInt("loan_id"), rs.getString("title"),
-                    rs.getString("borrower"), rs.getDate("loan_date"),
+                    rs.getString("member_name"), rs.getDate("loan_date"),
                     rs.getDate("due_date"), rs.getString("status"));
             }
         } catch (SQLException e) {
@@ -424,13 +535,26 @@ public class LibraryServlet extends HttpServlet {
         }
         out.println("</tbody></table>");
 
+        // Borrow form (member dropdown)
         out.println("<h3>Borrow a Book</h3>");
         out.println("<form action='" + ctx + "/library/borrow' method='post'>");
-        out.println("<label>Book ID</label><input name='book_id' type='number' required>");
-        out.println("<label>Borrower</label><input name='borrower' required>");
+        out.println("<label>Book ID</label><input name='book_id' type='number' value='" + bookIdVal + "' required>");
+        out.println("<label>Member</label><select name='member_id' required>");
+        out.println("<option value=''>-- Select Member --</option>");
+        try (Connection c = DriverManager.getConnection(URL, USER, PASSWORD);
+             Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery("SELECT member_id, name FROM members ORDER BY name")) {
+            while (rs.next()) {
+                out.printf("<option value='%d'>%s</option>", rs.getInt("member_id"), rs.getString("name"));
+            }
+        } catch (SQLException e) {
+            out.println("<option disabled>Error loading members</option>");
+        }
+        out.println("</select>");
         out.println("<input type='submit' value='Borrow'>");
         out.println("</form>");
 
+        // Return form
         out.println("<h3>Return a Book</h3>");
         out.println("<form action='" + ctx + "/library/return' method='post'>");
         out.println("<label>Loan ID</label><input name='loan_id' type='number' required>");
@@ -441,9 +565,10 @@ public class LibraryServlet extends HttpServlet {
     }
 
     private void borrowBook(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-        int bookId = Integer.parseInt(req.getParameter("book_id"));
-        String borrower = req.getParameter("borrower");
+        int bookId   = Integer.parseInt(req.getParameter("book_id"));
+        int memberId = Integer.parseInt(req.getParameter("member_id"));
 
+        // Check quantity
         try (Connection c = DriverManager.getConnection(URL, USER, PASSWORD);
              PreparedStatement ps = c.prepareStatement("SELECT quantity FROM books WHERE book_id = ?")) {
             ps.setInt(1, bookId);
@@ -461,6 +586,7 @@ public class LibraryServlet extends HttpServlet {
             }
         } catch (SQLException e) { e.printStackTrace(); }
 
+        // Transaction: reduce qty, insert loan
         try (Connection c = DriverManager.getConnection(URL, USER, PASSWORD)) {
             c.setAutoCommit(false);
             try {
@@ -471,9 +597,9 @@ public class LibraryServlet extends HttpServlet {
                 LocalDate today = LocalDate.now();
                 LocalDate due = today.plusDays(14);
                 PreparedStatement loanPs = c.prepareStatement(
-                    "INSERT INTO loans (book_id, borrower, loan_date, due_date) VALUES (?,?,?,?)");
+                    "INSERT INTO loans (book_id, member_id, loan_date, due_date) VALUES (?,?,?,?)");
                 loanPs.setInt(1, bookId);
-                loanPs.setString(2, borrower);
+                loanPs.setInt(2, memberId);
                 loanPs.setDate(3, Date.valueOf(today));
                 loanPs.setDate(4, Date.valueOf(due));
                 loanPs.executeUpdate();
